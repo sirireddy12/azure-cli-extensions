@@ -64,3 +64,6 @@ def get_graph_client_service_principals(cli_ctx):
 def get_subscription_client():
     from azure.mgmt.resource import SubscriptionClient
     return get_client_from_cli_profile(SubscriptionClient).subscriptions
+
+def cf_storage(cli_ctx, subscription_id=None):
+    return get_mgmt_service_client(cli_ctx, ResourceType.MGMT_STORAGE, subscription_id=subscription_id)
