@@ -1778,7 +1778,6 @@ def collect_logs(cmd, client, output_file, resource_group_name, name, storage_ac
 
     print()
     print(cc.identity)
-    storage_account_name = "ccsophiezhaoarnsaeastus2"
     log_storage_account_url = f"https://{storage_account_name}.blob.core.windows.net/"
 
     print(f'{colorama.Fore.GREEN}Your logs are being uploaded to storage account {format_bright(storage_account_name)}')
