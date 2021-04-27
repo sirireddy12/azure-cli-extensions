@@ -9,30 +9,25 @@ from knack.help_files import helps  # pylint: disable=unused-import
 
 helps['k8s-troubleshoot'] = """
     type: group
-    short-summary: Commands to manage K8s-troubleshoots.
+    short-summary: Commands to troubleshoot azure-arc connected kubernetes cluster.
 """
 
-helps['k8s-troubleshoot create'] = """
-    type: command
-    short-summary: Create a K8s-troubleshoot.
+
+helps['k8s-troubleshoot diagnose'] = """
+  type: command
+  short-summary: Collects diagnose infomation and gets logs on the connected cluster.
+  parameters:
+        - name: --storage-account
+          type: string
+          short-summary: Name or ID of the storage account to save the diagnostic information.
+        - name: --sas-token
+          type: string
+          short-summary: The SAS token with writable permission for the storage account.
+  examples:
+      - name: using storage account name and a shared access signature token with write permission
+        text: az connectedk8s troubleshoot -g MyResourceGroup -n ConnectedCluster --storage-account MyStorageAccount --sas-token "MySasToken"
+      - name: using the resource id of a storage account resource you own.
+        text: az connectedk8s troubleshoot -g MyResourceGroup -n ConnectedCluster --storage-account "MyStoreageAccountResourceId"
+      - name: using the storagea account in diagnostics settings for your connected cluster.
+        text: az connectedk8s troubleshoot -g MyResourceGroup -n ConnectedCluster
 """
-
-helps['k8s-troubleshoot list'] = """
-    type: command
-    short-summary: List K8s-troubleshoots.
-"""
-
-# helps['k8s-troubleshoot delete'] = """
-#     type: command
-#     short-summary: Delete a K8s-troubleshoot.
-# """
-
-# helps['k8s-troubleshoot show'] = """
-#     type: command
-#     short-summary: Show details of a K8s-troubleshoot.
-# """
-
-# helps['k8s-troubleshoot update'] = """
-#     type: command
-#     short-summary: Update a K8s-troubleshoot.
-# """

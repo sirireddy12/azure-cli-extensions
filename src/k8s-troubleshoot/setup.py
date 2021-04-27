@@ -32,9 +32,9 @@ CLASSIFIERS = [
     'License :: OSI Approved :: MIT License',
 ]
 
-# TODO: Add any additional SDK dependencies here
 DEPENDENCIES = [
-    'azure-cli-core'
+    'kubernetes==11.0.0',
+    'azure-mgmt-hybridkubernetes'
 ]
 
 with open('README.rst', 'r', encoding='utf-8') as f:
@@ -46,15 +46,13 @@ setup(
     name='k8s-troubleshoot',
     version=VERSION,
     description='Microsoft Azure Command-Line Tools K8s-troubleshoot Extension',
-    # TODO: Update author and email, if applicable
     author='Microsoft Corporation',
-    author_email='azpycli@microsoft.com',
-    # TODO: consider pointing directly to your source code instead of the generic repo
-    url='https://github.com/Azure/azure-cli-extensions',
+    author_email='k8connect@microsoft.com',
+    url='https://github.com/Azure/azure-cli-extensions/tree/master/src/k8s-troubleshoot',
     long_description=README + '\n\n' + HISTORY,
     license='MIT',
     classifiers=CLASSIFIERS,
     packages=find_packages(),
     install_requires=DEPENDENCIES,
-    package_data={'azext_k8s-troubleshoot': ['azext_metadata.json']},
+    package_data={'azext_k8s_troubleshoot': ['azext_metadata.json']},
 )

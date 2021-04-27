@@ -7,16 +7,18 @@ import os
 from knack.util import CLIError
 from knack.log import get_logger
 import logging
-import version
+from packaging import version
 from kubernetes import client as kube_client, config
 import azext_k8s_troubleshoot._utils as utils
+import colorama  # pylint: disable=import-error
 
 
 logger = get_logger(__name__)
 
 
 def diagnose_k8s_troubleshoot(cmd, client, resource_group_name, cluster_name, kube_config=None, kube_context=None, location=None, storage_account=None,
-                 sas_token=None, output_file=os.path.join(os.path.expanduser('~'), '.azure', 'az_k8s_troubleshoot_output.tar.gz')):
+                              sas_token=None, output_file=os.path.join(os.path.expanduser('~'), '.azure', 'az_k8s_troubleshoot_output.tar.gz')):
+    colorama.init()                          
     troubleshoot_log_path = os.path.join(os.path.expanduser('~'), '.azure', 'connected8s_troubleshoot.log')
     utils.setup_logger('connectedk8s_troubleshoot', troubleshoot_log_path)
     tr_logger = logging.getLogger('connectedk8s_troubleshoot')
@@ -24,7 +26,7 @@ def diagnose_k8s_troubleshoot(cmd, client, resource_group_name, cluster_name, ku
     kube_config = utils.set_kube_config(kube_config)
 
     # Loading the kubeconfig file in kubernetes client configuration
-    utils.load_kube_config(kube_config, kube_context)
+    utils.load_kube_config(kube_config, kube_context, custom_logger=tr_logger)
     configuration = kube_client.Configuration()
     try:
         latest_connectedk8s_version = utils.get_latest_extension_version()
@@ -35,6 +37,10 @@ def diagnose_k8s_troubleshoot(cmd, client, resource_group_name, cluster_name, ku
             if version.parse(local_connectedk8s_version) < version.parse(latest_connectedk8s_version):
                 logger.warning("You have an update pending. You can update the connectedk8s extension to latest v{} using 'az extension update -n connectedk8s'".format(latest_connectedk8s_version))
 
+        crb_permission = utils.can_create_clusterrolebindings(configuration, custom_logger=tr_logger)
+        if not crb_permission:
+            tr_logger.error("CLI logged in cred doesn't have permission to create clusterrolebindings on this kubernetes cluster.")
+
         permitted = utils.check_system_permissions(tr_logger)
         if not permitted:
             tr_logger.error("CLI doesn't have the permission/privilege to install azure arc charts at path {}".format(os.path.join(os.path.expanduser('~'), '.azure', 'AzureArcCharts')))
@@ -42,11 +48,11 @@ def diagnose_k8s_troubleshoot(cmd, client, resource_group_name, cluster_name, ku
         if not required_node_exists:
             tr_logger.warning("Couldn't find any linux/amd64 node on the Kubernetes cluster")
         config_dp_endpoint = utils.get_config_dp_endpoint(cmd, location)
-        helm_registry_path = utils.get_helm_registry(cmd, config_dp_endpoint)
+        helm_registry_path = utils.get_helm_registry(cmd, config_dp_endpoint, custom_logger=tr_logger)
         tr_logger.info("Helm Registry path : {}".format(helm_registry_path))
         utils.check_provider_registrations(cmd.cli_ctx, tr_logger)
         os.environ['HELM_EXPERIMENTAL_OCI'] = '1'
-        utils.pull_helm_chart(helm_registry_path, kube_config, kube_context)
+        utils.pull_helm_chart(helm_registry_path, kube_config, kube_context, custom_logger=tr_logger)
 
         try:
             # Fetch ConnectedCluster
@@ -84,6 +90,8 @@ def diagnose_k8s_troubleshoot(cmd, client, resource_group_name, cluster_name, ku
             os.remove(troubleshoot_log_path)
         except Exception as ex:
             tr_logger.error("Error occured while archiving the log file: {}".format(str(ex)), exc_info=True)
+
+        print(f"{colorama.Style.BRIGHT}{colorama.Fore.GREEN}The diagnostic logs have been collected and archived at '{output_file}'.")
 
     except Exception as ex:
         tr_logger.error("Exception caught while running troubleshoot: {}".format(str(ex)), exc_info=True)

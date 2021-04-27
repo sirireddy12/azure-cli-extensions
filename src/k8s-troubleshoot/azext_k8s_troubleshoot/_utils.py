@@ -5,12 +5,13 @@
 
 from kubernetes import client as kube_client, config
 from azure.cli.core import telemetry
-from azure.cli.core.azclierror import FileOperationError
+from azure.cli.core.util import send_raw_request
 from knack.log import get_logger
 import os
 import logging
 import requests
 import json
+from subprocess import Popen, PIPE
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import azext_k8s_troubleshoot._constants as consts
@@ -55,13 +56,11 @@ def set_kube_config(kube_config):
     return None
 
 
-def load_kube_config(kube_config, kube_context):
+def load_kube_config(kube_config, kube_context, custom_logger=None):
     try:
         config.load_kube_config(config_file=kube_config, context=kube_context)
     except Exception as e:
-        telemetry.set_exception(exception=e, fault_type=consts.Load_Kubeconfig_Fault_Type,
-                                summary='Problem loading the kubeconfig file')
-        raise FileOperationError("Problem loading the kubeconfig file." + str(e))
+        handle_logging_error(custom_logger, "Problem loading the kubeconfig file." + str(e))
 
 
 def get_latest_extension_version(extension_name='connectedk8s'):
@@ -179,12 +178,13 @@ def check_provider_registrations(cli_ctx, custom_logger):
 # Returns a list of kubernetes pod objects in a given namespace. Object description at: https://github.com/kubernetes-client/python/blob/master/kubernetes/docs/V1PodList.md
 def get_pod_list(api_instance, namespace, label_selector="", field_selector=""):
     try:
-        return api_instance.list_namespaced_pod(namespace, label_selector=label_selector, field_selector="")
+        return api_instance.list_namespaced_pod(namespace, label_selector=label_selector, field_selector=field_selector)
     except Exception as e:
         logger.debug("Error occurred when retrieving pod information: " + str(e))
 
 
 def check_linux_amd64_node(configuration, custom_logger=None):
+    try_list_node_fix()
     api_instance = kube_client.CoreV1Api(kube_client.ApiClient(configuration))
     try:
         api_response = api_instance.list_node()
@@ -194,10 +194,7 @@ def check_linux_amd64_node(configuration, custom_logger=None):
             if node_arch == "amd64" and node_os == "linux":
                 return True
     except Exception as e:  # pylint: disable=broad-except
-        if custom_logger:
-            custom_logger.error("Error occured while trying to find a linux/amd64 node: " + str(e))
-        else:
-            logger.debug("Error occured while trying to find a linux/amd64 node: " + str(e))
+        handle_logging_error(custom_logger, "Error occured while trying to find a linux/amd64 node: " + str(e))
         # utils.kubernetes_exception_handler(e, consts.Kubernetes_Node_Type_Fetch_Fault, 'Unable to find a linux/amd64 node',
                                         #    raise_error=False)
     return False
@@ -207,3 +204,75 @@ def get_config_dp_endpoint(cmd, location):
     cloud_based_domain = cmd.cli_ctx.cloud.endpoints.active_directory.split('.')[2]
     config_dp_endpoint = "https://{}.dp.kubernetesconfiguration.azure.{}".format(location, cloud_based_domain)
     return config_dp_endpoint
+
+
+def get_helm_registry(cmd, config_dp_endpoint, custom_logger=None, dp_endpoint_dogfood=None, release_train_dogfood=None):
+    # Setting uri
+    get_chart_location_url = "{}/{}/GetLatestHelmPackagePath?api-version=2019-11-01-preview".format(config_dp_endpoint, 'azure-arc-k8sagents')
+    release_train = os.getenv('RELEASETRAIN') if os.getenv('RELEASETRAIN') else 'stable'
+    if dp_endpoint_dogfood:
+        get_chart_location_url = "{}/azure-arc-k8sagents/GetLatestHelmPackagePath?api-version=2019-11-01-preview".format(dp_endpoint_dogfood)
+        if release_train_dogfood:
+            release_train = release_train_dogfood
+    uri_parameters = ["releaseTrain={}".format(release_train)]
+    resource = cmd.cli_ctx.cloud.endpoints.active_directory_resource_id
+
+    # Sending request
+    try:
+        r = send_raw_request(cmd.cli_ctx, 'post', get_chart_location_url, uri_parameters=uri_parameters, resource=resource)
+    except Exception as e:
+        handle_logging_error(custom_logger, "Error while fetching helm chart registry path: " + str(e))
+    if r.content:
+        try:
+            return r.json().get('repositoryPath')
+        except Exception as e:
+            handle_logging_error(custom_logger, "Error while fetching helm chart registry path from JSON response: " + str(e))
+    else:
+        handle_logging_error(custom_logger, "No content was found in helm registry path response.")
+
+
+def pull_helm_chart(registry_path, kube_config, kube_context, custom_logger=None):
+    cmd_helm_chart_pull = ["helm", "chart", "pull", registry_path]
+    if kube_config:
+        cmd_helm_chart_pull.extend(["--kubeconfig", kube_config])
+    if kube_context:
+        cmd_helm_chart_pull.extend(["--kube-context", kube_context])
+    response_helm_chart_pull = Popen(cmd_helm_chart_pull, stdout=PIPE, stderr=PIPE)
+    _, error_helm_chart_pull = response_helm_chart_pull.communicate()
+    if response_helm_chart_pull.returncode != 0:
+        handle_logging_error(custom_logger, "Unable to pull helm chart from the registry '{}': ".format(registry_path) + error_helm_chart_pull.decode("ascii"))
+
+
+def handle_logging_error(custom_logger, error_string):
+    if custom_logger:
+        custom_logger.error(error_string)
+    else:
+        logger.error(error_string)
+
+
+def can_create_clusterrolebindings(configuration, custom_logger=None):
+    try:
+        api_instance = kube_client.AuthorizationV1Api(kube_client.ApiClient(configuration))
+        access_review = kube_client.V1SelfSubjectAccessReview(spec={
+            "resourceAttributes":{
+                "verb":"create",
+                "resource":"clusterrolebindings",
+                "group": "rbac.authorization.k8s.io"
+            }
+        })
+        response = api_instance.create_self_subject_access_review(access_review)
+        return response.status.allowed
+    except Exception as ex:
+        handle_logging_error(custom_logger, "Couldn't check for the permission to create clusterrolebindings on this k8s cluster. Error: {}".format(str(ex)))
+
+
+def try_list_node_fix():
+    try:
+        from kubernetes.client.models.v1_container_image import V1ContainerImage
+
+        def names(self, names):
+            self._names = names
+
+        V1ContainerImage.names = V1ContainerImage.names.setter(names)
+    except Exception as ex:
+        logger.debug("Error while trying to monkey patch the fix for list_node(): {}".format(str(ex)))
