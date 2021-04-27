@@ -34,7 +34,8 @@ CLASSIFIERS = [
 
 DEPENDENCIES = [
     'kubernetes==11.0.0',
-    'azure-mgmt-hybridkubernetes'
+    'azure-mgmt-hybridkubernetes',
+    'packaging'
 ]
 
 with open('README.rst', 'r', encoding='utf-8') as f:
