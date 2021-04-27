@@ -28,6 +28,6 @@ helps['k8s-troubleshoot diagnose'] = """
         text: az connectedk8s troubleshoot -g MyResourceGroup -n ConnectedCluster --storage-account MyStorageAccount --sas-token "MySasToken"
       - name: using the resource id of a storage account resource you own.
         text: az connectedk8s troubleshoot -g MyResourceGroup -n ConnectedCluster --storage-account "MyStoreageAccountResourceId"
-      - name: using the storagea account in diagnostics settings for your connected cluster.
+      - name: using the storage account in diagnostics settings for your connected cluster.
         text: az connectedk8s troubleshoot -g MyResourceGroup -n ConnectedCluster
 """
