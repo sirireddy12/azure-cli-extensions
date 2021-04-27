@@ -7,7 +7,7 @@ import os
 from knack.util import CLIError
 from knack.log import get_logger
 import logging
-from packaging import version
+from setuptools._vendor.packaging import version
 from kubernetes import client as kube_client, config
 import azext_k8s_troubleshoot._utils as utils
 import colorama  # pylint: disable=import-error
