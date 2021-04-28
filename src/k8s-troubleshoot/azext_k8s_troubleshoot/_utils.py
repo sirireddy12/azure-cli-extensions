@@ -11,6 +11,7 @@ import os
 import logging
 import requests
 import json
+import colorama  # pylint: disable=import-error
 from subprocess import Popen, PIPE
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -276,3 +277,15 @@ def try_list_node_fix():
         V1ContainerImage.names = V1ContainerImage.names.setter(names)
     except Exception as ex:
         logger.debug("Error while trying to monkey patch the fix for list_node(): {}".format(str(ex)))
+
+
+def format_hyperlink(the_link):
+    # usage : f'{format_hyperlink("https://azure.microsoft.com/en-us/features/storage-explorer/")}'
+    return f'\033[1m{colorama.Style.BRIGHT}{colorama.Fore.BLUE}{the_link}{colorama.Style.RESET_ALL}'
+
+
+def get_kubernetes_secret(api_instance, namespace, secret_name, custom_logger=None):
+    try:
+        return api_instance.read_namespaced_secret(secret_name, namespace)
+    except Exception as e:
+        handle_logging_error(custom_logger, "Error occurred when retrieving secret '{}': ".format(secret_name) + str(e))

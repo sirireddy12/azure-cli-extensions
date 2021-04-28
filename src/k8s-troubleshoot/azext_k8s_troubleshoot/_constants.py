@@ -9,7 +9,10 @@
 Connected_Cluster_Provider_Namespace = 'Microsoft.Kubernetes'
 Kubernetes_Configuration_Provider_Namespace = 'Microsoft.KubernetesConfiguration'
 Custom_Locations_Provider_Namespace = 'Microsoft.ExtendedLocation'
+Arc_Namespace = 'azure-arc'
 DEFAULT_REQUEST_TIMEOUT = 10  # seconds
+AZURE_IDENTITY_CERTIFICATE_SECRET = 'azure-identity-certificate'
+ISO_861_Time_format = "%Y-%m-%dT%H:%M:%SZ"
 
 # Custom fault types
 

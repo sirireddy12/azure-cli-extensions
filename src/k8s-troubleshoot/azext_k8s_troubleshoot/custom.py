@@ -4,12 +4,15 @@
 # --------------------------------------------------------------------------------------------
 
 import os
+from datetime import datetime, timezone
 from knack.util import CLIError
 from knack.log import get_logger
 import logging
+import json
 from setuptools._vendor.packaging import version
 from kubernetes import client as kube_client, config
 import azext_k8s_troubleshoot._utils as utils
+import azext_k8s_troubleshoot._constants as consts
 import colorama  # pylint: disable=import-error
 
 
@@ -80,6 +83,21 @@ def diagnose_k8s_troubleshoot(cmd, client, resource_group_name, cluster_name, ku
 
         except Exception as ex:
             tr_logger.error("Error occured while fetching pod's statues : {}".format(str(ex)))
+
+        cert_secret = utils.get_kubernetes_secret(kapi_instance, consts.Arc_Namespace, consts.AZURE_IDENTITY_CERTIFICATE_SECRET, custom_logger=tr_logger)
+        if (not cert_secret) or (not hasattr(cert_secret, 'data')) or (consts.AZURE_IDENTITY_CERTIFICATE_SECRET not in cert_secret.data):
+            tr_logger.error("{} secret is not present on the kubernetes cluster".format(consts.AZURE_IDENTITY_CERTIFICATE_SECRET))
+            logger.warning("{} secret is not present on the kubernetes cluster".format(consts.AZURE_IDENTITY_CERTIFICATE_SECRET))
+
+        try:
+            cc_object = json.loads(connected_cluster.response.content)
+            cert_expirn_time = datetime.strptime(cc_object.get("properties").get("managedIdentityCertificateExpirationTime"), consts.ISO_861_Time_format).replace(tzinfo=timezone.utc)
+            current_time = datetime.now(timezone.utc)
+            if cert_expirn_time != datetime.min and cert_expirn_time < current_time:
+                tr_logger.error("MSI certificate on the cluster has expired.")
+                logger.warning("MSI certificate on the cluster has expired.")
+        except Exception as ex:
+            tr_logger.error("Error occured while checking if the MSI certificate has expired: {}".format(str(ex)), exc_info=True)
 
         try:
             # Creating the .tar.gz for logs and deleting the actual log file
