@@ -76,7 +76,7 @@ def diagnose_k8s_troubleshoot(cmd, client, resource_group_name, cluster_name, ku
             for pod in pod_list.items:
                 pods_count += 1
                 if pod.status.phase != 'Running':
-                    tr_logger.warning("Pod {} is in {} state. Reason: {}. Container statuses: {}".format(pod.metadata.name, pod.status.phase, pod.status.reason, pod.status.container_statuses))
+                    tr_logger.warning("Pod {} is in {} state. Reason: {}. Container statuses: {} .\n Current condition of this pod: {}\n".format(pod.metadata.name, pod.status.phase, pod.status.reason, pod.status.container_statuses, pod.status.conditions))
 
             if pods_count == 0:
                 tr_logger.warning("No pods found in azure-arc namespace.")
@@ -86,8 +86,8 @@ def diagnose_k8s_troubleshoot(cmd, client, resource_group_name, cluster_name, ku
 
         cert_secret = utils.get_kubernetes_secret(kapi_instance, consts.Arc_Namespace, consts.AZURE_IDENTITY_CERTIFICATE_SECRET, custom_logger=tr_logger)
         if (not cert_secret) or (not hasattr(cert_secret, 'data')) or (consts.AZURE_IDENTITY_CERTIFICATE_SECRET not in cert_secret.data):
-            tr_logger.error("{} secret is not present on the kubernetes cluster".format(consts.AZURE_IDENTITY_CERTIFICATE_SECRET))
-            logger.warning("{} secret is not present on the kubernetes cluster".format(consts.AZURE_IDENTITY_CERTIFICATE_SECRET))
+            tr_logger.error("{} secret is not present on the kubernetes cluster.".format(consts.AZURE_IDENTITY_CERTIFICATE_SECRET))
+            logger.warning("{} secret is not present on the kubernetes cluster.".format(consts.AZURE_IDENTITY_CERTIFICATE_SECRET))
 
         try:
             cc_object = json.loads(connected_cluster.response.content)
