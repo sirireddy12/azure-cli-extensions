@@ -14,6 +14,7 @@ from kubernetes import client as kube_client, config
 import azext_k8s_troubleshoot._utils as utils
 import azext_k8s_troubleshoot._constants as consts
 import colorama  # pylint: disable=import-error
+from azure.cli.core.azclierror import CLIInternalError
 
 
 logger = get_logger(__name__)
@@ -113,4 +114,4 @@ def diagnose_k8s_troubleshoot(cmd, client, resource_group_name, cluster_name, ku
 
     except Exception as ex:
         tr_logger.error("Exception caught while running troubleshoot: {}".format(str(ex)), exc_info=True)
-        logger.error("Exception caught while running troubleshoot: {}".format(str(ex)), exc_info=True)
+        raise CLIInternalError("Error occurred while troubleshooting: " + str(ex))

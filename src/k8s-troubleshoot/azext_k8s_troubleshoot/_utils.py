@@ -61,7 +61,7 @@ def load_kube_config(kube_config, kube_context, custom_logger=None):
     try:
         config.load_kube_config(config_file=kube_config, context=kube_context)
     except Exception as e:
-        handle_logging_error(custom_logger, "Problem loading the kubeconfig file." + str(e))
+        handle_logging_error(custom_logger, "Problem loading the kubeconfig file. " + str(e))
 
 
 def get_latest_extension_version(extension_name='connectedk8s'):
@@ -246,7 +246,7 @@ def pull_helm_chart(registry_path, kube_config, kube_context, custom_logger=None
 
 def handle_logging_error(custom_logger, error_string):
     if custom_logger:
-        custom_logger.error(error_string)
+        custom_logger.error(error_string, exc_info=True)
     else:
         logger.error(error_string)
 
