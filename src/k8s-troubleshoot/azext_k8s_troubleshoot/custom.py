@@ -100,6 +100,8 @@ def diagnose_k8s_troubleshoot(cmd, client, resource_group_name, cluster_name, ku
         except Exception as ex:
             tr_logger.error("Error occured while checking if the MSI certificate has expired: {}".format(str(ex)), exc_info=True)
 
+        utils.check_delete_job(configuration, 'azure-arc', custom_logger=tr_logger)
+
         try:
             # Creating the .tar.gz for logs and deleting the actual log file
             import tarfile
