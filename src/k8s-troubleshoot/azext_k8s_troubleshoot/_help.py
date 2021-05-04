@@ -25,9 +25,9 @@ helps['k8s-troubleshoot diagnose'] = """
           short-summary: The SAS token with writable permission for the storage account.
   examples:
       - name: using storage account name and a shared access signature token with write permission
-        text: az connectedk8s troubleshoot -g MyResourceGroup -n ConnectedCluster --storage-account MyStorageAccount --sas-token "MySasToken"
+        text: az k8s-troubleshoot diagnose -g MyResourceGroup -n ConnectedCluster --storage-account MyStorageAccount --sas-token "MySasToken"
       - name: using the resource id of a storage account resource you own.
-        text: az connectedk8s troubleshoot -g MyResourceGroup -n ConnectedCluster --storage-account "MyStoreageAccountResourceId"
+        text: az k8s-troubleshoot diagnose -g MyResourceGroup -n ConnectedCluster --storage-account "MyStoreageAccountResourceId"
       - name: using the storage account in diagnostics settings for your connected cluster.
-        text: az connectedk8s troubleshoot -g MyResourceGroup -n ConnectedCluster
+        text: az k8s-troubleshoot diagnose -g MyResourceGroup -n ConnectedCluster
 """
