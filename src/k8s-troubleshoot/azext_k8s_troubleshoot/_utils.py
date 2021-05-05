@@ -295,13 +295,13 @@ def check_delete_job(configuration, namespace, custom_logger=None):
     try:
         api_instance = kube_client.BatchV1Api(kube_client.ApiClient(configuration))
         api_response = api_instance.list_namespaced_job(namespace)
-        if api_response.items:
-            annotations = list(api_response.items)[0].metadata.annotations
+        for item in list(api_response.items):
+            annotations = item.metadata.annotations
             if annotations.get("helm.sh/hook") == "pre-delete":
-                delete_job = list(api_response.items)[0]
-                job_status = delete_job.status
-                job_conditions = job_status.conditions
+                job_status = item.status
+                job_conditions = item.conditions
                 if job_status.succeeded == 0 or job_status.active > 0:
                     custom_logger.info("Delete Job status conditions: {}".format(job_status.conditions))
+                break
     except Exception as e:
         handle_logging_error(custom_logger, "Error occurred while retrieving status of the delete job: {}".format(str(e)))
