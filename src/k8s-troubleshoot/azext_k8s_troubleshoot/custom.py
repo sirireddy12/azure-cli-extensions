@@ -53,9 +53,10 @@ def diagnose_k8s_troubleshoot(cmd, client, resource_group_name, cluster_name, ku
             try:
                 if ex.error.error.code == "NotFound" or ex.error.error.code == "ResourceNotFound":
                     tr_logger.error("Connected cluster resource doesn't exist. " + str(ex))
+                else:
+                    tr_logger.error("Couldn't check the existence of Connected cluster resource. Error: {}".format(str(ex)))
             except AttributeError:
-                pass
-            tr_logger.error("Couldn't check the existence of Connected cluster resource. Error: {}".format(str(ex)))
+                tr_logger.error("Couldn't check the existence of Connected cluster resource. Error: {}".format(str(ex)))
 
         kapi_instance = kube_client.CoreV1Api(kube_client.ApiClient(configuration))
         try:
