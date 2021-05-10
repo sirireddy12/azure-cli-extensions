@@ -160,7 +160,7 @@ def check_system_permissions(custom_logger):
         return False
     except Exception as ex:
         custom_logger.debug("Couldn't check the system permissions for creating an azure arc charts directory. Error: {}".format(str(ex)), exc_info=True)
-        return False
+        return None
 
 
 def check_provider_registrations(cli_ctx, custom_logger):
@@ -196,8 +196,6 @@ def check_linux_amd64_node(configuration, custom_logger=None):
                 return True
     except Exception as e:  # pylint: disable=broad-except
         handle_logging_error(custom_logger, "Error occured while trying to find a linux/amd64 node: " + str(e))
-        # utils.kubernetes_exception_handler(e, consts.Kubernetes_Node_Type_Fetch_Fault, 'Unable to find a linux/amd64 node',
-                                        #    raise_error=False)
     return False
 
 
@@ -265,6 +263,7 @@ def can_create_clusterrolebindings(configuration, custom_logger=None):
         return response.status.allowed
     except Exception as ex:
         handle_logging_error(custom_logger, "Couldn't check for the permission to create clusterrolebindings on this k8s cluster. Error: {}".format(str(ex)))
+        return None
 
 
 def try_list_node_fix():
@@ -299,7 +298,6 @@ def check_delete_job(configuration, namespace, custom_logger=None):
             annotations = item.metadata.annotations
             if annotations.get("helm.sh/hook") == "pre-delete":
                 job_status = item.status
-                job_conditions = item.conditions
                 if job_status.succeeded == 0 or job_status.active > 0:
                     custom_logger.info("Delete Job status conditions: {}".format(job_status.conditions))
                 break

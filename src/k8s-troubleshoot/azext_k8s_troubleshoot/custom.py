@@ -39,24 +39,11 @@ def diagnose_k8s_troubleshoot(cmd, client, resource_group_name, cluster_name, ku
         tr_logger.info("Local connectedk8s version: {}".format(local_connectedk8s_version))
         if latest_connectedk8s_version and local_connectedk8s_version != 'Unknown' and local_connectedk8s_version != 'NotFound':
             if version.parse(local_connectedk8s_version) < version.parse(latest_connectedk8s_version):
-                logger.warning("You have an update pending. You can update the connectedk8s extension to latest v{} using 'az extension update -n connectedk8s'".format(latest_connectedk8s_version))
+                print("You have an update pending. You can update the connectedk8s extension to latest v{} using 'az extension update -n connectedk8s'".format(latest_connectedk8s_version))
 
-        crb_permission = utils.can_create_clusterrolebindings(configuration, custom_logger=tr_logger)
+        crb_permission = utils.can_create_clusterrolebindings(configuration, custom_logger=tr_logger)  # To add in connectedk8s connect command itself
         if not crb_permission:
-            tr_logger.error("CLI logged in cred doesn't have permission to create clusterrolebindings on this kubernetes cluster.")
-
-        permitted = utils.check_system_permissions(tr_logger)
-        if not permitted:
-            tr_logger.error("CLI doesn't have the permission/privilege to install azure arc charts at path {}".format(os.path.join(os.path.expanduser('~'), '.azure', 'AzureArcCharts')))
-        required_node_exists = utils.check_linux_amd64_node(configuration, custom_logger=tr_logger)
-        if not required_node_exists:
-            tr_logger.warning("Couldn't find any linux/amd64 node on the Kubernetes cluster")
-        config_dp_endpoint = utils.get_config_dp_endpoint(cmd, location)
-        helm_registry_path = utils.get_helm_registry(cmd, config_dp_endpoint, custom_logger=tr_logger)
-        tr_logger.info("Helm Registry path : {}".format(helm_registry_path))
-        utils.check_provider_registrations(cmd.cli_ctx, tr_logger)
-        os.environ['HELM_EXPERIMENTAL_OCI'] = '1'
-        utils.pull_helm_chart(helm_registry_path, kube_config, kube_context, custom_logger=tr_logger)
+            tr_logger.error("CLI logged-in credentials doesn't have permission to create clusterrolebindings on this kubernetes cluster.")
 
         try:
             # Fetch ConnectedCluster
@@ -99,8 +86,6 @@ def diagnose_k8s_troubleshoot(cmd, client, resource_group_name, cluster_name, ku
                 logger.warning("MSI certificate on the cluster has expired.")
         except Exception as ex:
             tr_logger.error("Error occured while checking if the MSI certificate has expired: {}".format(str(ex)), exc_info=True)
-
-        utils.check_delete_job(configuration, 'azure-arc', custom_logger=tr_logger)
 
         try:
             # Creating the .tar.gz for logs and deleting the actual log file
