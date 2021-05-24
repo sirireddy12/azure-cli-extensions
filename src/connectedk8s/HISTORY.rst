@@ -3,9 +3,14 @@
 Release History
 ===============
 
+1.1.5
+++++++
+* Add custom-locations oid parameter for spn scenario
+
+
 1.1.4
 ++++++
-* `az connectedk8s troubleshoot`: Added support for troubleshooting issues with a connected cluster
+* Add compatible logic for the track 2 migration of resource dependence
 
 
 1.1.3

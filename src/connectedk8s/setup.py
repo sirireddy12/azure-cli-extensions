@@ -17,7 +17,7 @@ except ImportError:
 # TODO: Confirm this is the right version number you want and it matches your
 # HISTORY.rst entry.
 
-VERSION = '1.1.4'
+VERSION = '1.1.5'
 
 # The full list of classifiers is available at
 # https://pypi.python.org/pypi?%3Aaction=list_classifiers
@@ -37,6 +37,7 @@ CLASSIFIERS = [
 DEPENDENCIES = [
     'kubernetes==11.0.0',
     'pycryptodome==3.9.8',
+    'azure-storage-blob==12.8.1'
 ]
 
 with open('README.md', 'r', encoding='utf-8') as f:
