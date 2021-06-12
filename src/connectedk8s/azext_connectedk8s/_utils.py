@@ -20,7 +20,8 @@ import platform
 from six.moves.urllib.request import urlopen  # pylint: disable=import-error
 from tabulate import tabulate  # pylint: disable=import-error
 import tempfile
-
+from zipfile import ZipFile
+from os.path import basename
 
 from knack.log import get_logger
 from knack.prompting import NoTTYException, prompt_y_n
@@ -828,7 +829,6 @@ def apply_periscope_yaml(kubectl_prior, deployment_yaml, temp_yaml_file, temp_ya
         os.remove(temp_yaml_path)
 
 
-
 def copy_and_zip_periscope_files(kubectl_prior):
     periscope_files = []
     time.sleep(5)   
@@ -839,15 +839,15 @@ def copy_and_zip_periscope_files(kubectl_prior):
         universal_newlines=True)
     pod_lines = pods.splitlines()
     for line in pod_lines:
+        time.sleep(5)
         info = line.split()
         pod = info[0]
         status = info[2]
         node = info[6]
         if status != "Running":
             continue
-        file = node+".zip"
+        file = "periscope-logs-"+node
 
-        time.sleep(5)
         subprocess_cmd = kubectl_prior + ["cp", "-n", "aks-periscope", pod+":"+file, file]
         subprocess.call(subprocess_cmd, stderr=subprocess.STDOUT)
         periscope_files.append(file)
@@ -858,11 +858,12 @@ def copy_and_zip_periscope_files(kubectl_prior):
         import tarfile
         with tarfile.open(periscope_zip , "w:gz") as tar:
             for file in periscope_files:
-                tar.add(file, file)
-                #logging.shutdown()  # To release log file handler, so that the actual log file can be removed after archiving
-                os.remove(file)
+                zipfilename = file + '.zip'
+                shutil.make_archive(file, "zip", file)
+                tar.add(zipfilename, zipfilename)
+                shutil.rmtree(file)
+                os.remove(zipfilename)
 
-        print(f"{colorama.Style.BRIGHT}{colorama.Fore.GREEN}Some diagnostic logs have been collected and archived at '{periscope_zip}'.")
     except Exception as ex:
         logger.error("Error occured while archiving the periscope logs: {}".format(str(ex)))
         print(f"{colorama.Style.BRIGHT}{colorama.Fore.GREEN}You can find the unarchived periscope logs at '{periscope_log_path}'.")
@@ -895,7 +896,6 @@ def try_archive_log_file(troubleshoot_log_path, output_file):
         logging.shutdown()  # To release log file handler, so that the actual log file can be removed after archiving
         os.remove(troubleshoot_log_path)
         os.remove(periscope_zip)
-        print(f"{colorama.Style.BRIGHT}{colorama.Fore.GREEN}Some diagnostic logs have been collected and archived at '{output_file}'.")
     except Exception as ex:
         logger.error("Error occured while archiving the log file: {}".format(str(ex)))
         print(f"{colorama.Style.BRIGHT}{colorama.Fore.GREEN}You can find the unarchived log file at '{troubleshoot_log_path}'.")
