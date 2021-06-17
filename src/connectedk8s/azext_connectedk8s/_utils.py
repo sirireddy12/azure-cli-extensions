@@ -20,8 +20,6 @@ import platform
 from six.moves.urllib.request import urlopen  # pylint: disable=import-error
 from tabulate import tabulate  # pylint: disable=import-error
 import tempfile
-from zipfile import ZipFile
-from os.path import basename
 
 from knack.log import get_logger
 from knack.prompting import NoTTYException, prompt_y_n
