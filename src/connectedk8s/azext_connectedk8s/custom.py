@@ -4,6 +4,7 @@
 # --------------------------------------------------------------------------------------------
 
 import errno
+from keyword import kwlist
 from logging import exception
 import os
 import json
@@ -14,10 +15,12 @@ from base64 import b64encode, b64decode
 import stat
 import platform
 from azure.core.exceptions import ClientAuthenticationError
+from rsa import PublicKey
 import yaml
 import requests
 import urllib.request
 import shutil
+import base64
 from _thread import interrupt_main
 from psutil import process_iter, NoSuchProcess, AccessDenied, ZombieProcess, net_connections
 from knack.util import CLIError
@@ -27,6 +30,7 @@ from knack.prompting import NoTTYException
 from azure.cli.core.commands.client_factory import get_subscription_id
 from azure.cli.core._profile import Profile
 from azure.cli.core.util import sdk_no_wait
+#from jose import jwk, constants
 from azure.cli.core import telemetry
 from azure.cli.core.azclierror import ManualInterrupt, InvalidArgumentValueError, UnclassifiedUserFault, CLIInternalError, FileOperationError, ClientRequestError, DeploymentError, ValidationError, ArgumentUsageError, MutuallyExclusiveArgumentError, RequiredArgumentMissingError, ResourceNotFoundError
 from kubernetes import client as kube_client, config
@@ -879,25 +883,9 @@ def update_agents(cmd, client, resource_group_name, cluster_name, https_proxy=""
     # Get Helm chart path
     chart_path = utils.get_chart_path(registry_path, kube_config, kube_context, helm_client_location)
 
-    cmd_helm_values = [helm_client_location, "get", "values", "azure-arc", "--namespace", release_namespace]
-    if kube_config:
-        cmd_helm_values.extend(["--kubeconfig", kube_config])
-    if kube_context:
-        cmd_helm_values.extend(["--kube-context", kube_context])
-    cmd_helm_values.extend([">", "userValues.txt"])
-
-    response_helm_values_get = Popen(cmd_helm_values, stdout=PIPE, stderr=PIPE)
-    _, error_helm_get_values = response_helm_values_get.communicate()
-    if response_helm_values_get.returncode != 0:
-        if ('forbidden' in error_helm_get_values.decode("ascii") or 'timed out waiting for the condition' in error_helm_get_values.decode("ascii")):
-            telemetry.set_user_fault()
-        telemetry.set_exception(exception=error_helm_get_values.decode("ascii"), fault_type=consts.Get_Helm_Values_Failed,
-                                summary='Error while doing helm get values azure-arc')
-        raise CLIInternalError(str.format(consts.Update_Agent_Failure, error_helm_get_values.decode("ascii")))
-
     cmd_helm_upgrade = [helm_client_location, "upgrade", "azure-arc", chart_path, "--namespace", release_namespace,
-                        "-f",
-                        "userValues.txt", "--wait", "--output", "json"]
+                        "--reuse-values",
+                        "--wait", "--output", "json"]
     if values_file_provided:
         cmd_helm_upgrade.extend(["-f", values_file])
     if auto_upgrade is not None:
@@ -1748,39 +1736,40 @@ def client_side_proxy_wrapper(cmd,
         if cloud == consts.Azure_ChinaCloudName:
             dict_file['cloud'] = 'AzureChinaCloud'
 
-        # Fetching creds
-        creds_location = os.path.expanduser(os.path.join('~', creds_string))
-        try:
-            with open(creds_location) as f:
-                creds_list = json.load(f)
-        except Exception as e:
-            telemetry.set_exception(exception=e, fault_type=consts.Load_Creds_Fault_Type,
-                                    summary='Unable to load accessToken.json')
-            raise FileOperationError("Failed to load credentials." + str(e))
+        if not utils.is_cli_using_msal_auth():
+            # Fetching creds
+            creds_location = os.path.expanduser(os.path.join('~', creds_string))
+            try:
+                with open(creds_location) as f:
+                    creds_list = json.load(f)
+            except Exception as e:
+                telemetry.set_exception(exception=e, fault_type=consts.Load_Creds_Fault_Type,
+                                        summary='Unable to load accessToken.json')
+                raise FileOperationError("Failed to load credentials." + str(e))
 
-        user_name = account['user']['name']
+            user_name = account['user']['name']
 
-        if user_type == 'user':
-            key = 'userId'
-            key2 = 'refreshToken'
-        else:
-            key = 'servicePrincipalId'
-            key2 = 'accessToken'
+            if user_type == 'user':
+                key = 'userId'
+                key2 = 'refreshToken'
+            else:
+                key = 'servicePrincipalId'
+                key2 = 'accessToken'
 
-        for i in range(len(creds_list)):
-            creds_obj = creds_list[i]
+            for i in range(len(creds_list)):
+                creds_obj = creds_list[i]
 
-            if key in creds_obj and creds_obj[key] == user_name:
-                creds = creds_obj[key2]
-                break
+                if key in creds_obj and creds_obj[key] == user_name:
+                    creds = creds_obj[key2]
+                    break
 
-        if creds == '':
-            telemetry.set_exception(exception='Credentials of user not found.', fault_type=consts.Creds_NotFound_Fault_Type,
-                                    summary='Unable to find creds of user')
-            raise UnclassifiedUserFault("Credentials of user not found.")
+            if creds == '':
+                telemetry.set_exception(exception='Credentials of user not found.', fault_type=consts.Creds_NotFound_Fault_Type,
+                                       summary='Unable to find creds of user')
+                raise UnclassifiedUserFault("Credentials of user not found.")
 
-        if user_type != 'user':
-            dict_file['identity']['clientSecret'] = creds
+            if user_type != 'user':
+                dict_file['identity']['clientSecret'] = creds
     else:
         dict_file = {'server': {'httpPort': int(client_proxy_port), 'httpsPort': int(api_server_port)}}
         if cloud == consts.Azure_ChinaCloudName:
@@ -1885,6 +1874,8 @@ def client_side_proxy(cmd,
             client_proxy=True
         )
         response = client.list_cluster_user_credential(resource_group_name, cluster_name, list_prop)
+        #print("list cluster credentials")
+        #print(response.text)
     except Exception as e:
         if flag == 1:
             clientproxy_process.terminate()
@@ -1904,21 +1895,91 @@ def client_side_proxy(cmd,
             telemetry.set_exception(exception=e, fault_type=consts.Run_Clientproxy_Fault_Type,
                                     summary='Unable to run client proxy executable')
             raise CLIInternalError("Failed to start proxy process." + str(e))
-
-        if user_type == 'user':
-            identity_data = {}
-            identity_data['refreshToken'] = creds
-            identity_uri = f'https://localhost:{api_server_port}/identity/rt'
+        
+        if utils.is_cli_using_msal_auth():
+            data1 = {}
+            poppublickey_uri = f'https://localhost:{api_server_port}/identity/poppublickey'  
 
             # Needed to prevent skip tls warning from printing to the console
             original_stderr = sys.stderr
             f = open(os.devnull, 'w')
             sys.stderr = f
 
-            make_api_call_with_retries(identity_uri, identity_data, False, consts.Post_RefreshToken_Fault_Type,
+            response1 = make_api_call_with_retries(poppublickey_uri, data1, "get", False, consts.Get_PublicKey_Info_Fault_Type,
+                                      'Unable to fetch public key info from clientproxy',
+                                      "Failed to fetch public key info from client proxy", clientproxy_process)
+            
+            sys.stderr = original_stderr
+            print(type(response1))
+            print("response1")
+            print(response1.text)
+            x = json.loads(response1.text)
+            print("kid1")
+            kid1 = x['publicKey']['kid']
+            del x['publicKey']['kid']
+            public_key = x['publicKey']
+            
+            #jwk1 = jwk.RSAKey(algorithm=constants.Algorithms.RS256, key=public_key.decode('utf-8')).to_dict()    
+            #print(json.dumps(jwk.RSAKey(algorithm=constants.Algorithms.RS256, key=public_key.decode('utf-8')).to_dict()))
+            jwkstring = json.dumps(public_key)
+            print(type(jwkstring))
+            print(jwkstring)
+
+            jwksha = hashlib.sha256(jwkstring.encode('utf-8')).digest()
+            print("jwk sha")
+            print(jwksha)
+
+            jwkTP = base64.urlsafe_b64encode(jwksha).decode('utf-8')
+            #remove padding '=' character
+            if jwkTP[len(jwkTP)-1] == '=':
+                jwkTP = jwkTP[:-1]        
+
+            print("jwk TP")
+            print(jwkTP)
+            #print(type(jwkTP))    
+
+            req_cnfJSON = {"kid":jwkTP, "xms_ksl":"sw"}
+            req_cnf = base64.urlsafe_b64encode(json.dumps(req_cnfJSON).encode('utf-8')).decode('utf-8')
+
+            #remove padding '=' character
+            if req_cnf[len(req_cnf)-1] == '=':
+                req_cnf = req_cnf[:-1]        
+
+            print("req_cnf")
+            print(req_cnf)
+            data2 = {"token_type": "pop", "key_id": "key1", "req_cnf": req_cnf}
+            print(data2)
+
+            profile = Profile(cli_ctx=cmd.cli_ctx)    
+            credential, _, _ = profile.get_login_credentials(subscription_id=profile.get_subscription()["id"], resource=consts.KAP_1P_Server_App_Scope)
+            print("get token")
+            accessToken = credential.get_token(consts.KAP_1P_Server_App_Scope, data=data2)
+            jwt = accessToken.token
+            print(jwt)
+
+            jwttokendata = {"accessToken": jwt, "resource": "/subscriptions/1bfbb5d0-917e-4346-9026-1d3b344417f5/resourceGroups/sikasire1/providers/Microsoft.Kubernetes/connectedClusters/msaltest4", "tenantID": "72f988bf-86f1-41af-91ab-2d7cd011db47", "kid": kid1}
+            print(jwttokendata)
+            at_uri = f'https://localhost:{api_server_port}/identity/at'
+            response2 = make_api_call_with_retries(at_uri, jwttokendata, "post", False, consts.PublicKey_Export_Fault_Type, 'pass', "pass", clientproxy_process)
+            print(response2)
+            print("response2")
+            print(response2.text)
+        else:
+            if user_type == 'user':
+                identity_data = {}
+                identity_data['refreshToken'] = creds
+                identity_uri = f'https://localhost:{api_server_port}/identity/rt'
+
+                # Needed to prevent skip tls warning from printing to the console
+                original_stderr = sys.stderr
+                f = open(os.devnull, 'w')
+                sys.stderr = f
+
+                make_api_call_with_retries(identity_uri, identity_data, False, consts.Post_RefreshToken_Fault_Type,
                                        'Unable to post refresh token details to clientproxy',
                                        "Failed to pass refresh token details to proxy.", clientproxy_process)
-            sys.stderr = original_stderr
+                sys.stderr = original_stderr
+        
 
     data = prepare_clientproxy_data(response)
     expiry = data['hybridConnectionConfig']['expirationTime']
@@ -1929,7 +1990,7 @@ def client_side_proxy(cmd,
     uri = f'http://localhost:{client_proxy_port}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Kubernetes/connectedClusters/{cluster_name}/register?api-version=2020-10-01'
 
     # Posting hybrid connection details to proxy in order to get kubeconfig
-    response = make_api_call_with_retries(uri, data, False, consts.Post_Hybridconn_Fault_Type,
+    response = make_api_call_with_retries(uri, data, "post", False, consts.Post_Hybridconn_Fault_Type,
                                           'Unable to post hybrid connection details to clientproxy',
                                           "Failed to pass hybrid connection details to proxy.", clientproxy_process)
 
@@ -1965,18 +2026,21 @@ def client_side_proxy(cmd,
     return expiry, clientproxy_process
 
 
-def make_api_call_with_retries(uri, data, tls_verify, fault_type, summary, cli_error, clientproxy_process):
+def make_api_call_with_retries(uri, data, method, tls_verify, fault_type, summary, cli_error, proc_subprocess=None):
     for i in range(consts.API_CALL_RETRIES):
         try:
-            response = requests.post(uri, json=data, verify=tls_verify)
+            response = requests.request(method, uri, json=data, verify=tls_verify)
             return response
         except Exception as e:
             time.sleep(5)
             if i != consts.API_CALL_RETRIES - 1:
                 pass
             else:
-                telemetry.set_exception(exception=e, fault_type=fault_type, summary=summary)
-                close_subprocess_and_raise_cli_error(clientproxy_process, cli_error + str(e))
+                telemetry.set_exception(
+                    exception=e, fault_type=fault_type, summary=summary)
+                if proc_subprocess is not None:
+                    close_subprocess_and_raise_cli_error(
+                        proc_subprocess, cli_error + str(e))
 
 
 def insert_token_in_kubeconfig(data, token):
